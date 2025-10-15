@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Училищна система за управление</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#"><i class="bi bi-mortarboard-fill"></i> Училищна система</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="materialsDropdown" role="button" 
+                           data-bs-toggle="dropdown">
+                            <i class="bi bi-box-seam"></i> Материали
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" data-section="materials-all">
+                                <i class="bi bi-boxes"></i> Всички материали
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" data-section="materials-low">
+                                <i class="bi bi-exclamation-triangle"></i> Намаляващи
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" data-section="materials-out">
+                                <i class="bi bi-x-circle"></i> Изчерпани
+                            </a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="booksDropdown" role="button" 
+                           data-bs-toggle="dropdown">
+                            <i class="bi bi-book"></i> Учебници
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" data-section="books-textbooks">
+                                <i class="bi bi-journal-text"></i> Учебници
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" data-section="books-workbooks">
+                                <i class="bi bi-journal-bookmark"></i> Учебни тетрадки
+                            </a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item" id="admin-menu" style="display: none;">
+                        <a class="nav-link" href="#" data-section="users">
+                            <i class="bi bi-people"></i> Потребители
+                        </a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center text-white">
+                    <span class="me-3">
+                        <i class="bi bi-person-circle"></i> 
+                        <span id="user-name">{{ user.full_name }}</span>
+                        <small class="badge bg-light text-dark ms-1" id="user-role">{{ user.role }}</small>
+                    </span>
+                    <button class="btn btn-outline-light btn-sm" onclick="logout()">
+                        <i class="bi bi-box-arrow-right"></i> Изход
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4" id="main-content">
+        <!-- Materials Section -->
+        <div id="materials-all-section" class="content-section">
+            <h2><i class="bi bi-box-seam"></i> Управление на материали</h2>
+            
+            <!-- Statistics Cards -->
+            <div class="row mb-3" id="materials-stats">
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <h5 class="card-title"><i class="bi bi-check-circle"></i> Налични</h5>
+                            <h2 id="stat-available">0</h2>
+                            <small>Материали с достатъчна наличност</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-dark">
+                        <div class="card-body">
+                            <h5 class="card-title"><i class="bi bi-exclamation-triangle"></i> Намаляващи</h5>
+                            <h2 id="stat-low">0</h2>
+                            <small>Материали с ниска наличност</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-danger text-white">
+                        <div class="card-body">
+                            <h5 class="card-title"><i class="bi bi-x-circle"></i> Изчерпани</h5>
+                            <h2 id="stat-out">0</h2>
+                            <small>Материали без наличност</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body">
+                            <h5 class="card-title"><i class="bi bi-boxes"></i> Общо</h5>
+                            <h2 id="stat-total">0</h2>
+                            <small>Всички материали</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-3">
+                <div class="card-header bg-light">
+                    <div class="row align-items-center">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" id="materials-search" placeholder="Търсене...">
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" id="materials-category">
+                                <option value="">Всички категории</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="materials-low-stock">
+                                <label class="form-check-label" for="materials-low-stock">
+                                    Само ниски количества
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-primary w-100" onclick="loadMaterials()">
+                                <i class="bi bi-arrow-clockwise"></i> Обнови
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-3">
+                        <button class="btn btn-success" onclick="showAddMaterialModal()">
+                            <i class="bi bi-plus-circle"></i> Добави материал
+                        </button>
+                        <div>
+                            <button class="btn btn-secondary" onclick="exportMaterials(false)">
+                                <i class="bi bi-download"></i> Експорт всички
+                            </button>
+                            <button class="btn btn-warning" onclick="exportMaterials(true)">
+                                <i class="bi bi-download"></i> Експорт ниски
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th width="5%">Статус</th>
+                                    <th width="30%">Име</th>
+                                    <th width="15%">Категория</th>
+                                    <th width="15%">Наличност</th>
+                                    <th width="15%">Забележки</th>
+                                    <th width="10%">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="materials-tbody">
+                                <tr><td colspan="6" class="text-center">Зареждане...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Materials Low Stock Section -->
+        <div id="materials-low-section" class="content-section" style="display: none;">
+            <h2><i class="bi bi-exclamation-triangle text-warning"></i> Намаляващи материали</h2>
+            
+            <!-- Statistics Cards -->
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="card bg-warning text-dark">
+                        <div class="card-body">
+                            <h5 class="card-title"><i class="bi bi-exclamation-triangle"></i> Намаляващи</h5>
+                            <h2 id="stat-low-page">0</h2>
+                            <small>Материали под минималното количество</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-3">
+                <div class="card-header bg-warning bg-opacity-25">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Материали с ниска наличност</h5>
+                        <button class="btn btn-warning" onclick="exportMaterials(true)">
+                            <i class="bi bi-download"></i> Експорт
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th width="5%">Статус</th>
+                                    <th width="30%">Име</th>
+                                    <th width="15%">Категория</th>
+                                    <th width="15%">Наличност / Праг</th>
+                                    <th width="15%">Забележки</th>
+                                    <th width="10%">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="materials-low-tbody">
+                                <tr><td colspan="6" class="text-center">Зареждане...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Materials Out of Stock Section -->
+        <div id="materials-out-section" class="content-section" style="display: none;">
+            <h2><i class="bi bi-x-circle text-danger"></i> Изчерпани материали</h2>
+            
+            <!-- Statistics Cards -->
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="card bg-danger text-white">
+                        <div class="card-body">
+                            <h5 class="card-title"><i class="bi bi-x-circle"></i> Изчерпани</h5>
+                            <h2 id="stat-out-page">0</h2>
+                            <small>Материали без наличност (0 бр)</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-3">
+                <div class="card-header bg-danger bg-opacity-25">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0 text-danger"><i class="bi bi-x-circle"></i> Материали без наличност</h5>
+                        <button class="btn btn-danger" onclick="exportMaterials(true)">
+                            <i class="bi bi-download"></i> Експорт
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill"></i> 
+                        <strong>Внимание!</strong> Следните материали са изчерпани и трябва да се възобновят спешно!
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th width="5%">Статус</th>
+                                    <th width="35%">Име</th>
+                                    <th width="20%">Категория</th>
+                                    <th width="20%">Минимален праг</th>
+                                    <th width="10%">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="materials-out-tbody">
+                                <tr><td colspan="5" class="text-center">Зареждане...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Books Section -->
+        <div id="books-textbooks-section" class="content-section" style="display: none;">
+            <h2><i class="bi bi-journal-text"></i> Управление на учебници</h2>
+            <div class="card mt-3">
+                <div class="card-header bg-light">
+                    <div class="row align-items-center">
+                        <div class="col-md-3">
+                            <input type="text" class="form-control" id="books-search" placeholder="Търсене по предмет...">
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select" id="books-grade">
+                                <option value="">Всички класове</option>
+                                <option value="1">1 клас</option>
+                                <option value="2">2 клас</option>
+                                <option value="3">3 клас</option>
+                                <option value="4">4 клас</option>
+                                <option value="5">5 клас</option>
+                                <option value="6">6 клас</option>
+                                <option value="7">7 клас</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" id="books-publisher">
+                                <option value="">Всички издателства</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="books-low-stock">
+                                <label class="form-check-label" for="books-low-stock">
+                                    Ниски количества
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-primary w-100" onclick="loadBooks('Учебник')">
+                                <i class="bi bi-arrow-clockwise"></i> Обнови
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-3">
+                        <button class="btn btn-success" onclick="showAddBookModal('Учебник')">
+                            <i class="bi bi-plus-circle"></i> Добави учебник
+                        </button>
+                        <div>
+                            <button class="btn btn-secondary" onclick="exportBooks('Учебник', false)">
+                                <i class="bi bi-download"></i> Експорт всички
+                            </button>
+                            <button class="btn btn-warning" onclick="exportBooks('Учебник', true)">
+                                <i class="bi bi-download"></i> Експорт ниски
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th width="5%">Статус</th>
+                                    <th width="25%">Предмет</th>
+                                    <th width="8%">Клас</th>
+                                    <th width="15%">Издателство</th>
+                                    <th width="15%">Автор</th>
+                                    <th width="12%">Наличност</th>
+                                    <th width="10%">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="books-tbody">
+                                <tr><td colspan="7" class="text-center">Зареждане...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Workbooks Section -->
+        <div id="books-workbooks-section" class="content-section" style="display: none;">
+            <h2><i class="bi bi-journal-bookmark"></i> Управление на учебни тетрадки</h2>
+            <div class="card mt-3">
+                <div class="card-header bg-light">
+                    <div class="row align-items-center">
+                        <div class="col-md-3">
+                            <input type="text" class="form-control" id="workbooks-search" placeholder="Търсене...">
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select" id="workbooks-grade">
+                                <option value="">Всички класове</option>
+                                <option value="1">1 клас</option>
+                                <option value="2">2 клас</option>
+                                <option value="3">3 клас</option>
+                                <option value="4">4 клас</option>
+                                <option value="5">5 клас</option>
+                                <option value="6">6 клас</option>
+                                <option value="7">7 клас</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" id="workbooks-publisher">
+                                <option value="">Всички издателства</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="workbooks-low-stock">
+                                <label class="form-check-label" for="workbooks-low-stock">
+                                    Ниски количества
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-primary w-100" onclick="loadBooks('Учебна тетрадка')">
+                                <i class="bi bi-arrow-clockwise"></i> Обнови
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-3">
+                        <button class="btn btn-success" onclick="showAddBookModal('Учебна тетрадка')">
+                            <i class="bi bi-plus-circle"></i> Добави тетрадка
+                        </button>
+                        <div>
+                            <button class="btn btn-secondary" onclick="exportBooks('Учебна тетрадка', false)">
+                                <i class="bi bi-download"></i> Експорт всички
+                            </button>
+                            <button class="btn btn-warning" onclick="exportBooks('Учебна тетрадка', true)">
+                                <i class="bi bi-download"></i> Експорт ниски
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th width="5%">Статус</th>
+                                    <th width="25%">Предмет</th>
+                                    <th width="8%">Клас</th>
+                                    <th width="15%">Издателство</th>
+                                    <th width="15%">Автор</th>
+                                    <th width="12%">Наличност</th>
+                                    <th width="10%">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="workbooks-tbody">
+                                <tr><td colspan="7" class="text-center">Зареждане...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Users Management Section (Admin only) -->
+        <div id="users-section" class="content-section" style="display: none;">
+            <h2><i class="bi bi-people"></i> Управление на потребители</h2>
+            <div class="card mt-3">
+                <div class="card-header bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Потребители на системата</h5>
+                        <button class="btn btn-success" onclick="showAddUserModal()">
+                            <i class="bi bi-person-plus"></i> Добави потребител
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Потребителско име</th>
+                                    <th>Пълно име</th>
+                                    <th>Роля</th>
+                                    <th>Компания</th>
+                                    <th>Създаден</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-tbody">
+                                <tr><td colspan="6" class="text-center">Зареждане...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals will be added by JavaScript -->
+    <div id="modals-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Global variables
+        let currentUser = null;
+        let currentSection = 'materials';
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', async function() {
+            await loadCurrentUser();
+            initNavigation();
+            showSection('materials-all');
+        });
+
+        // Load current user info
+        async function loadCurrentUser() {
+            try {
+                const response = await fetch('/api/current-user');
+                if (response.ok) {
+                    currentUser = await response.json();
+                    document.getElementById('user-name').textContent = currentUser.full_name;
+                    document.getElementById('user-role').textContent = currentUser.role === 'admin' ? 'Админ' : 'Потребител';
+                    
+                    // Show admin menu if user is admin
+                    if (currentUser.role === 'admin') {
+                        document.getElementById('admin-menu').style.display = 'block';
+                    }
+                } else {
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('Error loading user:', error);
+                window.location.href = '/login';
+            }
+        }
+
+        // Initialize navigation
+        function initNavigation() {
+            document.querySelectorAll('[data-section]').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const section = this.getAttribute('data-section');
+                    showSection(section);
+                });
+            });
+        }
+
+        // Show specific section
+        function showSection(section) {
+            currentSection = section;
+            
+            // Hide all sections
+            document.querySelectorAll('.content-section').forEach(el => {
+                el.style.display = 'none';
+            });
+            
+            // Show selected section
+            const sectionEl = document.getElementById(section + '-section');
+            if (sectionEl) {
+                sectionEl.style.display = 'block';
+            }
+            
+            // Load data based on section
+            switch(section) {
+                case 'materials-all':
+                    loadMaterials('all');
+                    loadMaterialsCategories();
+                    break;
+                case 'materials-low':
+                    loadMaterials('low');
+                    break;
+                case 'materials-out':
+                    loadMaterials('out');
+                    break;
+                case 'books-textbooks':
+                    loadBooks('Учебник');
+                    loadBooksPublishers();
+                    break;
+                case 'books-workbooks':
+                    loadBooks('Учебна тетрадка');
+                    loadBooksPublishers();
+                    break;
+                case 'users':
+                    if (currentUser && currentUser.role === 'admin') {
+                        loadUsers();
+                    }
+                    break;
+            }
+            
+            // Update active nav links
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            document.querySelectorAll(`[data-section="${section}"]`).forEach(link => {
+                link.classList.add('active');
+                link.closest('.nav-link')?.classList.add('active');
+            });
+        }
+
+        // Logout
+        async function logout() {
+            try {
+                await fetch('/api/logout', { method: 'POST' });
+                window.location.href = '/login';
+            } catch (error) {
+                console.error('Error logging out:', error);
+                window.location.href = '/login';
+            }
+        }
+
+        // Helper function to get status badge
+        function getStatusBadge(quantity, threshold) {
+            if (quantity === 0) {
+                return '<span class="badge bg-danger" style="font-size: 1.2rem;">🔴</span>';
+            } else if (quantity <= threshold) {
+                return '<span class="badge bg-warning" style="font-size: 1.2rem;">🟠</span>';
+            } else {
+                return '<span class="badge bg-success" style="font-size: 1.2rem;">🟢</span>';
+            }
+        }
+
+        // Helper function for toast notifications
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast-notification ${type}`;
+            toast.innerHTML = `<i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${message}`;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => toast.classList.add('show'), 100);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    </script>
+    <script src="{{ url_for('static', filename='materials.js') }}"></script>
+    <script src="{{ url_for('static', filename='books.js') }}"></script>
+    <script src="{{ url_for('static', filename='users.js') }}"></script>
+</body>
+</html>
