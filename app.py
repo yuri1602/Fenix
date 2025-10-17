@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, jsonify, send_file, session, redirect, url_for
 import sqlite3
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 from openpyxl import load_workbook
 import io
@@ -12,6 +12,12 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['SECRET_KEY'] = 'your-secret-key-change-in-production'  # Change this!
+
+# Session configuration for better mobile/tablet support
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to True if using HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Allow cookies from same site
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=1)  # 24 hours
 
 # Ensure upload folder exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -165,8 +171,9 @@ def init_db():
 
 @app.route('/')
 def index():
-    """Main page - redirect to login if not authenticated"""
+    """Main page - requires login"""
     if 'user_id' not in session:
+        print(f"⚠️  Session check failed - no user_id in session. Session data: {dict(session)}")
         return redirect(url_for('login_page'))
     
     # Get user data from session
@@ -177,6 +184,7 @@ def index():
         'role': session.get('role'),
         'company': session.get('company')
     }
+    print(f"✅ Session valid for user: {user_data['username']}")
     return render_template('index.html', user=user_data)
 
 @app.route('/login')
@@ -201,11 +209,16 @@ def login():
     conn.close()
     
     if user and check_password_hash(user['password_hash'], password):
+        session.permanent = True  # Make session persistent
         session['user_id'] = user['id']
         session['username'] = user['username']
         session['full_name'] = user['full_name']
         session['role'] = user['role']
         session['company'] = user['company']
+        
+        print(f"✅ User {username} logged in successfully. Session ID: {session.get('user_id')}")
+        print(f"   Session permanent: {session.permanent}")
+        print(f"   Session data: {dict(session)}")
         
         # Update last login
         conn = get_db_connection()
@@ -937,6 +950,194 @@ def get_books_stats():
         'low_stock': low_stock,
         'adequate': adequate
     })
+
+# ==================== ADMIN ENDPOINTS ====================
+
+@app.route('/api/admin/categories', methods=['GET'])
+@admin_required
+def get_categories_admin():
+    """Get all categories with material count (admin only)"""
+    conn = get_db_connection()
+    
+    categories = conn.execute('''
+        SELECT category as name, COUNT(*) as count 
+        FROM materials 
+        GROUP BY category 
+        ORDER BY category
+    ''').fetchall()
+    
+    conn.close()
+    
+    return jsonify([dict(row) for row in categories])
+
+@app.route('/api/admin/categories', methods=['POST'])
+@admin_required
+def add_category():
+    """Add new category (admin only)"""
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    
+    if not name:
+        return jsonify({'error': 'Category name is required'}), 400
+    
+    conn = get_db_connection()
+    
+    # Check if category already exists
+    existing = conn.execute('SELECT COUNT(*) as count FROM materials WHERE category = ?', (name,)).fetchone()
+    
+    if existing['count'] > 0:
+        conn.close()
+        return jsonify({'error': 'Категорията вече съществува'}), 400
+    
+    conn.close()
+    
+    return jsonify({'message': 'Category added successfully', 'name': name}), 201
+
+@app.route('/api/admin/categories', methods=['PUT'])
+@admin_required
+def update_category():
+    """Update category name (admin only) - updates all materials with this category"""
+    data = request.get_json()
+    old_name = data.get('old_name', '').strip()
+    new_name = data.get('name', '').strip()
+    
+    if not old_name or not new_name:
+        return jsonify({'error': 'Old and new category names are required'}), 400
+    
+    if old_name == new_name:
+        return jsonify({'message': 'No changes made'}), 200
+    
+    conn = get_db_connection()
+    
+    # Check if new name already exists
+    existing = conn.execute('SELECT COUNT(*) as count FROM materials WHERE category = ?', (new_name,)).fetchone()
+    
+    if existing['count'] > 0:
+        conn.close()
+        return jsonify({'error': 'Категорията вече съществува'}), 400
+    
+    # Update all materials with this category
+    conn.execute('UPDATE materials SET category = ? WHERE category = ?', (new_name, old_name))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Category updated successfully'})
+
+@app.route('/api/admin/categories', methods=['DELETE'])
+@admin_required
+def delete_category():
+    """Delete category (admin only) - only if no materials use it"""
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    
+    if not name:
+        return jsonify({'error': 'Category name is required'}), 400
+    
+    conn = get_db_connection()
+    
+    # Check if any materials use this category
+    count = conn.execute('SELECT COUNT(*) as count FROM materials WHERE category = ?', (name,)).fetchone()
+    
+    if count['count'] > 0:
+        conn.close()
+        return jsonify({'error': 'Не може да се изтрие категория с материали'}), 400
+    
+    conn.close()
+    
+    return jsonify({'message': 'Category deleted successfully'})
+
+@app.route('/api/admin/publishers', methods=['GET'])
+@admin_required
+def get_publishers_admin():
+    """Get all publishers with book count (admin only)"""
+    conn = get_db_connection()
+    
+    publishers = conn.execute('''
+        SELECT publisher as name, COUNT(*) as count 
+        FROM books 
+        GROUP BY publisher 
+        ORDER BY publisher
+    ''').fetchall()
+    
+    conn.close()
+    
+    return jsonify([dict(row) for row in publishers])
+
+@app.route('/api/admin/publishers', methods=['POST'])
+@admin_required
+def add_publisher():
+    """Add new publisher (admin only)"""
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    
+    if not name:
+        return jsonify({'error': 'Publisher name is required'}), 400
+    
+    conn = get_db_connection()
+    
+    # Check if publisher already exists
+    existing = conn.execute('SELECT COUNT(*) as count FROM books WHERE publisher = ?', (name,)).fetchone()
+    
+    if existing['count'] > 0:
+        conn.close()
+        return jsonify({'error': 'Издателството вече съществува'}), 400
+    
+    conn.close()
+    
+    return jsonify({'message': 'Publisher added successfully', 'name': name}), 201
+
+@app.route('/api/admin/publishers', methods=['PUT'])
+@admin_required
+def update_publisher():
+    """Update publisher name (admin only) - updates all books with this publisher"""
+    data = request.get_json()
+    old_name = data.get('old_name', '').strip()
+    new_name = data.get('name', '').strip()
+    
+    if not old_name or not new_name:
+        return jsonify({'error': 'Old and new publisher names are required'}), 400
+    
+    if old_name == new_name:
+        return jsonify({'message': 'No changes made'}), 200
+    
+    conn = get_db_connection()
+    
+    # Check if new name already exists
+    existing = conn.execute('SELECT COUNT(*) as count FROM books WHERE publisher = ?', (new_name,)).fetchone()
+    
+    if existing['count'] > 0:
+        conn.close()
+        return jsonify({'error': 'Издателството вече съществува'}), 400
+    
+    # Update all books with this publisher
+    conn.execute('UPDATE books SET publisher = ? WHERE publisher = ?', (new_name, old_name))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Publisher updated successfully'})
+
+@app.route('/api/admin/publishers', methods=['DELETE'])
+@admin_required
+def delete_publisher():
+    """Delete publisher (admin only) - only if no books use it"""
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    
+    if not name:
+        return jsonify({'error': 'Publisher name is required'}), 400
+    
+    conn = get_db_connection()
+    
+    # Check if any books use this publisher
+    count = conn.execute('SELECT COUNT(*) as count FROM books WHERE publisher = ?', (name,)).fetchone()
+    
+    if count['count'] > 0:
+        conn.close()
+        return jsonify({'error': 'Не може да се изтрие издателство с учебници'}), 400
+    
+    conn.close()
+    
+    return jsonify({'message': 'Publisher deleted successfully'})
 
 if __name__ == '__main__':
     init_db()
