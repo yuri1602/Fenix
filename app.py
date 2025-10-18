@@ -1315,6 +1315,48 @@ def process_request(request_id):
     
     return jsonify({'message': f'Request {status} successfully'})
 
+@app.route('/api/requests/<int:request_id>', methods=['PUT'])
+@login_required
+def update_request(request_id):
+    """Update material request (only own pending requests)"""
+    conn = get_db_connection()
+    
+    # Get request
+    req = conn.execute('SELECT * FROM material_requests WHERE id = ?', (request_id,)).fetchone()
+    
+    if not req:
+        conn.close()
+        return jsonify({'error': 'Request not found'}), 404
+    
+    # Check permissions - only owner can edit
+    if req['user_id'] != session['user_id']:
+        conn.close()
+        return jsonify({'error': 'Permission denied'}), 403
+    
+    # Only pending requests can be edited
+    if req['status'] != 'pending':
+        conn.close()
+        return jsonify({'error': 'Cannot edit processed request'}), 400
+    
+    data = request.get_json()
+    requested_quantity = data.get('requested_quantity')
+    notes = data.get('notes', '').strip()
+    
+    if not requested_quantity or requested_quantity < 1:
+        conn.close()
+        return jsonify({'error': 'Invalid quantity'}), 400
+    
+    conn.execute('''
+        UPDATE material_requests 
+        SET requested_quantity = ?, notes = ?
+        WHERE id = ?
+    ''', (requested_quantity, notes if notes else None, request_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Request updated successfully'})
+
 @app.route('/api/requests/<int:request_id>', methods=['DELETE'])
 @login_required
 def delete_request(request_id):

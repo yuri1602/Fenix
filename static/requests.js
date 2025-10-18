@@ -119,6 +119,77 @@ function clearRequestsFilters() {
     showToast('Филтрите са изчистени');
 }
 
+// Export filtered requests to CSV
+function exportRequestsToCSV() {
+    const userId = document.getElementById('filter-user').value;
+    const materialId = document.getElementById('filter-material').value;
+    const status = document.getElementById('filter-status').value;
+    const dateFrom = document.getElementById('filter-date-from').value;
+    const dateTo = document.getElementById('filter-date-to').value;
+    
+    let filtered = allRequests;
+    
+    // Apply same filters as display
+    if (userId) filtered = filtered.filter(r => r.user_id == userId);
+    if (materialId) filtered = filtered.filter(r => r.material_id == materialId);
+    if (status) filtered = filtered.filter(r => r.status === status);
+    if (dateFrom) {
+        filtered = filtered.filter(r => {
+            const requestDate = new Date(r.created_at).toISOString().split('T')[0];
+            return requestDate >= dateFrom;
+        });
+    }
+    if (dateTo) {
+        filtered = filtered.filter(r => {
+            const requestDate = new Date(r.created_at).toISOString().split('T')[0];
+            return requestDate <= dateTo;
+        });
+    }
+    
+    if (filtered.length === 0) {
+        showToast('Няма заявки за експорт', 'error');
+        return;
+    }
+    
+    // CSV Header
+    let csv = '\uFEFF'; // BOM for Excel UTF-8 support
+    csv += 'Дата,Потребител,Материал,Категория,Наличност,Заявено,Статус,Обработена на,Обработена от,Бележка,Админ бележка\n';
+    
+    // CSV Data
+    filtered.forEach(req => {
+        const statusText = req.status === 'pending' ? 'Чакаща' : 
+                          req.status === 'approved' ? 'Одобрена' : 'Отказана';
+        
+        csv += `"${formatDate(req.created_at)}",`;
+        csv += `"${req.full_name}",`;
+        csv += `"${req.material_name}",`;
+        csv += `"${req.material_category}",`;
+        csv += `${req.current_quantity},`;
+        csv += `${req.requested_quantity},`;
+        csv += `"${statusText}",`;
+        csv += `"${req.processed_at ? formatDate(req.processed_at) : '-'}",`;
+        csv += `"${req.processed_by_name || '-'}",`;
+        csv += `"${req.notes || '-'}",`;
+        csv += `"${req.admin_notes || '-'}"\n`;
+    });
+    
+    // Download
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    const dateStr = new Date().toISOString().split('T')[0];
+    link.setAttribute('href', url);
+    link.setAttribute('download', `заявки_${dateStr}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast(`Експортирани ${filtered.length} заявки`);
+}
+
 // Load statistics (admin only)
 async function loadRequestsStats() {
     try {
@@ -212,19 +283,38 @@ function displayRequests(requests) {
                             <i class="bi bi-x-circle"></i>
                         </button>
                     ` : ''}
-                    ${isPending && isOwner && !isAdmin ? `
-                        <button class="btn btn-sm btn-danger" onclick="deleteRequest(${req.id})"
-                                title="Изтрий">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                    ` : ''}
-                    ${!isPending ? `
+                    ${!isPending && isAdmin ? `
                         <span class="text-muted">
                             <small>
                                 <i class="bi bi-clock"></i> ${formatDate(req.processed_at)}
                                 <br>от ${req.processed_by_name}
                             </small>
                         </span>
+                        <br>
+                        <button class="btn btn-sm btn-danger mt-1" onclick="deleteRequest(${req.id})"
+                                title="Изтрий">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    ` : ''}
+                    ${!isPending && !isAdmin ? `
+                        <span class="text-muted">
+                            <small>
+                                <i class="bi bi-clock"></i> ${formatDate(req.processed_at)}
+                                <br>от ${req.processed_by_name}
+                            </small>
+                        </span>
+                    ` : ''}
+                </td>
+                <td>
+                    ${isPending && isOwner ? `
+                        <button class="btn btn-sm btn-primary me-1" onclick="showEditRequestModal(${req.id})"
+                                title="Редактирай">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteRequest(${req.id})"
+                                title="Изтрий">
+                            <i class="bi bi-trash"></i>
+                        </button>
                     ` : ''}
                 </td>
             </tr>
@@ -675,6 +765,57 @@ async function deleteRequest(requestId) {
         } else {
             const error = await response.json();
             showToast(error.error || 'Грешка при изтриване', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Грешка при свързване със сървъра', 'error');
+    }
+}
+
+// Show edit request modal
+async function showEditRequestModal(requestId) {
+    const request = allRequests.find(r => r.id === requestId);
+    if (!request) return;
+    
+    const modal = new bootstrap.Modal(document.getElementById('editRequestModal'));
+    document.getElementById('edit-request-id').value = requestId;
+    document.getElementById('edit-request-material').value = request.material_name;
+    document.getElementById('edit-request-quantity').value = request.requested_quantity;
+    document.getElementById('edit-request-notes').value = request.notes || '';
+    
+    modal.show();
+}
+
+// Save edited request
+async function saveEditedRequest() {
+    const requestId = document.getElementById('edit-request-id').value;
+    const quantity = document.getElementById('edit-request-quantity').value;
+    const notes = document.getElementById('edit-request-notes').value;
+    
+    if (!quantity || quantity < 1) {
+        showToast('Моля въведете валидно количество', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/requests/${requestId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                requested_quantity: parseInt(quantity),
+                notes: notes.trim()
+            })
+        });
+        
+        if (response.ok) {
+            showToast('Заявката е обновена');
+            bootstrap.Modal.getInstance(document.getElementById('editRequestModal')).hide();
+            loadRequests();
+        } else {
+            const error = await response.json();
+            showToast(error.error || 'Грешка при обновяване', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
