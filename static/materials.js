@@ -1,5 +1,17 @@
 // Materials Management Module
 
+// Get status badge for material quantity (colored circle) - UPDATED VERSION
+function getMaterialStatusBadge(quantity, minThreshold) {
+    console.log('getMaterialStatusBadge called with:', quantity, minThreshold); // DEBUG
+    if (quantity === 0) {
+        return '<i class="bi bi-circle-fill text-danger" title="Изчерпан"></i>';
+    } else if (quantity <= minThreshold) {
+        return '<i class="bi bi-circle-fill text-warning" title="Нисък"></i>';
+    } else {
+        return '<i class="bi bi-circle-fill text-success" title="Наличен"></i>';
+    }
+}
+
 // Load all materials with filters
 async function loadMaterials(filterType = 'all') {
     const search = document.getElementById('materials-search')?.value || '';
@@ -95,7 +107,7 @@ function displayMaterials(materials, filterType = 'all') {
     if (filterType === 'out') {
         tbody.innerHTML = materials.map(m => `
             <tr class="table-danger">
-                <td>${getStatusBadge(m.quantity, m.min_threshold)}</td>
+                <td>${getMaterialStatusBadge(m.quantity, m.min_threshold)}</td>
                 <td><strong>${m.name}</strong></td>
                 <td><span class="badge bg-secondary">${m.category}</span></td>
                 <td>
@@ -118,7 +130,7 @@ function displayMaterials(materials, filterType = 'all') {
     if (filterType === 'low') {
         tbody.innerHTML = materials.map(m => `
             <tr class="table-warning">
-                <td>${getStatusBadge(m.quantity, m.min_threshold)}</td>
+                <td>${getMaterialStatusBadge(m.quantity, m.min_threshold)}</td>
                 <td><strong>${m.name}</strong></td>
                 <td><span class="badge bg-secondary">${m.category}</span></td>
                 <td>
@@ -155,7 +167,7 @@ function displayMaterials(materials, filterType = 'all') {
     // Normal display for all materials
     tbody.innerHTML = materials.map(m => `
         <tr${m.quantity > 0 && m.quantity <= m.min_threshold ? ' class="table-warning"' : ''}>
-            <td>${getStatusBadge(m.quantity, m.min_threshold)}</td>
+            <td>${getMaterialStatusBadge(m.quantity, m.min_threshold)}</td>
             <td><strong>${m.name}</strong></td>
             <td><span class="badge bg-secondary">${m.category}</span></td>
             <td>

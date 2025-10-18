@@ -1,5 +1,17 @@
 // Books Management Module
 
+// Get status badge for book quantity (colored circle) - UPDATED VERSION
+function getBookStatusBadge(quantity, minThreshold) {
+    console.log('getBookStatusBadge called with:', quantity, minThreshold); // DEBUG
+    if (quantity === 0) {
+        return '<i class="bi bi-circle-fill text-danger" title="Изчерпан"></i>';
+    } else if (quantity <= minThreshold) {
+        return '<i class="bi bi-circle-fill text-warning" title="Нисък"></i>';
+    } else {
+        return '<i class="bi bi-circle-fill text-success" title="Наличен"></i>';
+    }
+}
+
 // Load books (textbooks or workbooks)
 async function loadBooks(type) {
     const isWorkbook = type === 'Учебна тетрадка';
@@ -48,7 +60,7 @@ function displayBooks(books, tbodyId) {
     
     tbody.innerHTML = books.map(b => `
         <tr>
-            <td>${getStatusBadge(b.quantity, 5)}</td>
+            <td>${getBookStatusBadge(b.quantity, 5)}</td>
             <td><strong>${b.subject}</strong></td>
             <td><span class="badge bg-info">${b.grade} клас</span></td>
             <td><small>${b.publisher}</small></td>

@@ -100,6 +100,25 @@ def init_db():
         )
     ''')
     
+    # Material requests table (заявки за материали)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS material_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            material_id INTEGER NOT NULL,
+            requested_quantity INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            notes TEXT,
+            admin_notes TEXT,
+            processed_by INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            processed_at TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (material_id) REFERENCES materials(id),
+            FOREIGN KEY (processed_by) REFERENCES users(id)
+        )
+    ''')
+    
     # Create default admin user if no users exist
     user_count = conn.execute('SELECT COUNT(*) FROM users').fetchone()[0]
     if user_count == 0:
@@ -274,9 +293,17 @@ def create_user():
     """Create new user (admin only)"""
     data = request.get_json()
     
+    # Debug logging
+    print(f"DEBUG: Received data: {data}")
+    print(f"DEBUG: Data type: {type(data)}")
+    if data:
+        print(f"DEBUG: Keys in data: {data.keys()}")
+    
     required = ['username', 'password', 'full_name', 'role']
     if not all(field in data for field in required):
-        return jsonify({'error': 'Missing required fields'}), 400
+        missing = [field for field in required if field not in data]
+        print(f"DEBUG: Missing fields: {missing}")
+        return jsonify({'error': f'Missing required fields: {missing}'}), 400
     
     password_hash = generate_password_hash(data['password'])
     
@@ -1138,6 +1165,228 @@ def delete_publisher():
     conn.close()
     
     return jsonify({'message': 'Publisher deleted successfully'})
+
+# ==================== MATERIAL REQUESTS ENDPOINTS ====================
+
+@app.route('/api/requests', methods=['GET'])
+@login_required
+def get_requests():
+    """Get material requests (filtered by role)"""
+    conn = get_db_connection()
+    
+    if session.get('role') == 'admin':
+        # Admin sees all requests
+        requests = conn.execute('''
+            SELECT 
+                r.*,
+                u.username,
+                u.full_name,
+                m.name as material_name,
+                m.category as material_category,
+                m.quantity as current_quantity,
+                admin.full_name as processed_by_name
+            FROM material_requests r
+            JOIN users u ON r.user_id = u.id
+            JOIN materials m ON r.material_id = m.id
+            LEFT JOIN users admin ON r.processed_by = admin.id
+            ORDER BY 
+                CASE r.status 
+                    WHEN 'pending' THEN 1 
+                    WHEN 'approved' THEN 2 
+                    WHEN 'rejected' THEN 3 
+                END,
+                r.created_at DESC
+        ''').fetchall()
+    else:
+        # Regular users see only their own requests
+        requests = conn.execute('''
+            SELECT 
+                r.*,
+                u.username,
+                u.full_name,
+                m.name as material_name,
+                m.category as material_category,
+                m.quantity as current_quantity,
+                admin.full_name as processed_by_name
+            FROM material_requests r
+            JOIN users u ON r.user_id = u.id
+            JOIN materials m ON r.material_id = m.id
+            LEFT JOIN users admin ON r.processed_by = admin.id
+            WHERE r.user_id = ?
+            ORDER BY r.created_at DESC
+        ''', (session['user_id'],)).fetchall()
+    
+    conn.close()
+    
+    return jsonify([dict(row) for row in requests])
+
+@app.route('/api/requests', methods=['POST'])
+@login_required
+def create_request():
+    """Create new material request"""
+    data = request.get_json()
+    material_id = data.get('material_id')
+    requested_quantity = data.get('requested_quantity')
+    notes = data.get('notes', '').strip()
+    
+    if not material_id or not requested_quantity:
+        return jsonify({'error': 'Material and quantity are required'}), 400
+    
+    if requested_quantity <= 0:
+        return jsonify({'error': 'Quantity must be positive'}), 400
+    
+    conn = get_db_connection()
+    
+    # Check if material exists
+    material = conn.execute('SELECT * FROM materials WHERE id = ?', (material_id,)).fetchone()
+    if not material:
+        conn.close()
+        return jsonify({'error': 'Material not found'}), 404
+    
+    # Create request
+    conn.execute('''
+        INSERT INTO material_requests (user_id, material_id, requested_quantity, notes, status)
+        VALUES (?, ?, ?, ?, 'pending')
+    ''', (session['user_id'], material_id, requested_quantity, notes))
+    
+    conn.commit()
+    request_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+    conn.close()
+    
+    return jsonify({
+        'message': 'Request created successfully',
+        'id': request_id
+    }), 201
+
+@app.route('/api/requests/<int:request_id>', methods=['PUT'])
+@admin_required
+def process_request(request_id):
+    """Process material request (approve/reject) - admin only"""
+    data = request.get_json()
+    status = data.get('status')  # 'approved' or 'rejected'
+    admin_notes = data.get('admin_notes', '').strip()
+    
+    if status not in ['approved', 'rejected']:
+        return jsonify({'error': 'Invalid status'}), 400
+    
+    conn = get_db_connection()
+    
+    # Get request details
+    req = conn.execute('''
+        SELECT r.*, m.quantity as current_quantity
+        FROM material_requests r
+        JOIN materials m ON r.material_id = m.id
+        WHERE r.id = ?
+    ''', (request_id,)).fetchone()
+    
+    if not req:
+        conn.close()
+        return jsonify({'error': 'Request not found'}), 404
+    
+    if req['status'] != 'pending':
+        conn.close()
+        return jsonify({'error': 'Request already processed'}), 400
+    
+    # If approved, check if enough quantity and deduct
+    if status == 'approved':
+        if req['current_quantity'] < req['requested_quantity']:
+            conn.close()
+            return jsonify({'error': 'Insufficient quantity available'}), 400
+        
+        # Deduct quantity from materials
+        conn.execute('''
+            UPDATE materials 
+            SET quantity = quantity - ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (req['requested_quantity'], req['material_id']))
+    
+    # Update request status
+    conn.execute('''
+        UPDATE material_requests 
+        SET status = ?, 
+            admin_notes = ?, 
+            processed_by = ?, 
+            processed_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    ''', (status, admin_notes, session['user_id'], request_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': f'Request {status} successfully'})
+
+@app.route('/api/requests/<int:request_id>', methods=['DELETE'])
+@login_required
+def delete_request(request_id):
+    """Delete material request (only own pending requests)"""
+    conn = get_db_connection()
+    
+    # Get request
+    req = conn.execute('SELECT * FROM material_requests WHERE id = ?', (request_id,)).fetchone()
+    
+    if not req:
+        conn.close()
+        return jsonify({'error': 'Request not found'}), 404
+    
+    # Check permissions
+    if req['user_id'] != session['user_id'] and session.get('role') != 'admin':
+        conn.close()
+        return jsonify({'error': 'Permission denied'}), 403
+    
+    # Only pending requests can be deleted by regular users
+    if req['status'] != 'pending' and session.get('role') != 'admin':
+        conn.close()
+        return jsonify({'error': 'Cannot delete processed request'}), 400
+    
+    conn.execute('DELETE FROM material_requests WHERE id = ?', (request_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Request deleted successfully'})
+
+@app.route('/api/requests/stats', methods=['GET'])
+@admin_required
+def get_requests_stats():
+    """Get requests statistics (admin only)"""
+    conn = get_db_connection()
+    
+    stats = {
+        'pending': conn.execute("SELECT COUNT(*) as count FROM material_requests WHERE status = 'pending'").fetchone()['count'],
+        'approved': conn.execute("SELECT COUNT(*) as count FROM material_requests WHERE status = 'approved'").fetchone()['count'],
+        'rejected': conn.execute("SELECT COUNT(*) as count FROM material_requests WHERE status = 'rejected'").fetchone()['count'],
+        'total': conn.execute("SELECT COUNT(*) as count FROM material_requests").fetchone()['count']
+    }
+    
+    conn.close()
+    
+    return jsonify(stats)
+
+@app.route('/api/requests/history/<int:user_id>', methods=['GET'])
+@login_required
+def get_user_request_history(user_id):
+    """Get user's approved requests history"""
+    # Users can only see their own history, admins can see anyone's
+    if user_id != session['user_id'] and session.get('role') != 'admin':
+        return jsonify({'error': 'Permission denied'}), 403
+    
+    conn = get_db_connection()
+    
+    history = conn.execute('''
+        SELECT 
+            r.*,
+            m.name as material_name,
+            m.category as material_category,
+            admin.full_name as processed_by_name
+        FROM material_requests r
+        JOIN materials m ON r.material_id = m.id
+        LEFT JOIN users admin ON r.processed_by = admin.id
+        WHERE r.user_id = ? AND r.status = 'approved'
+        ORDER BY r.processed_at DESC
+    ''', (user_id,)).fetchall()
+    
+    conn.close()
+    
+    return jsonify([dict(row) for row in history])
 
 if __name__ == '__main__':
     init_db()

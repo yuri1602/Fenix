@@ -5,7 +5,9 @@ const originalFetch = window.fetch;
 
 window.fetch = function(url, options = {}) {
     // Automatically add credentials to all requests
-    options.credentials = options.credentials || 'same-origin';
+    if (!options.credentials) {
+        options.credentials = 'same-origin';
+    }
     
     return originalFetch(url, options)
         .then(response => {
@@ -21,3 +23,4 @@ window.fetch = function(url, options = {}) {
             throw error;
         });
 };
+

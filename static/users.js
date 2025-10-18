@@ -8,7 +8,9 @@ async function loadUsers() {
     }
     
     try {
-        const response = await fetch('/api/users');
+        const response = await fetch('/api/users', {
+            credentials: 'same-origin'
+        });
         if (response.ok) {
             const users = await response.json();
             displayUsers(users);
@@ -70,7 +72,9 @@ function showAddUserModal() {
 // Show Edit User Modal
 async function showEditUserModal(id) {
     try {
-        const response = await fetch('/api/users');
+        const response = await fetch('/api/users', {
+            credentials: 'same-origin'
+        });
         if (response.ok) {
             const users = await response.json();
             const user = users.find(u => u.id === id);
@@ -109,7 +113,7 @@ function createUserModal(mode, user = null) {
                                 <label class="form-label">Потребителско име *</label>
                                 <input type="text" class="form-control" id="user-username" 
                                        value="${user?.username || ''}" 
-                                       ${isEdit ? 'disabled' : 'required'}
+                                       ${isEdit ? 'readonly' : 'required'}
                                        placeholder="напр. ivan.petrov">
                                 ${isEdit ? '<small class="form-text text-muted">Потребителското име не може да се променя</small>' : ''}
                             </div>
@@ -132,8 +136,8 @@ function createUserModal(mode, user = null) {
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Роля *</label>
-                                <select class="form-select" id="user-role" required>
-                                    <option value="user" ${user?.role === 'user' ? 'selected' : ''}>Потребител</option>
+                                <select class="form-select" id="user-role-select" required>
+                                    <option value="user" ${!user || user.role === 'user' ? 'selected' : ''}>Потребител</option>
                                     <option value="admin" ${user?.role === 'admin' ? 'selected' : ''}>Администратор</option>
                                 </select>
                                 <small class="form-text text-muted">
@@ -167,8 +171,20 @@ async function saveUser(mode) {
     const fullName = document.getElementById('user-fullname').value.trim();
     const password = document.getElementById('user-password').value;
     const passwordConfirm = document.getElementById('user-password-confirm').value;
-    const role = document.getElementById('user-role').value;
+    
+    // Debug: Check if role element exists
+    const roleElement = document.getElementById('user-role-select');
+    console.log('Role element:', roleElement);
+    const role = roleElement ? roleElement.value : 'user'; // Default to 'user' if element not found
+    console.log('Role value:', role);
+    
     const company = document.getElementById('user-company').value.trim();
+    
+    // Debug logging
+    console.log('Save user mode:', mode);
+    console.log('Username:', username);
+    console.log('Full name:', fullName);
+    console.log('Role (final):', role);
     
     // Validation
     if (mode === 'add' && !username) {
@@ -202,6 +218,10 @@ async function saveUser(mode) {
         data.password = password;
     }
     
+    // Debug: Log the data being sent
+    console.log('Data to send:', data);
+    console.log('Data as JSON:', JSON.stringify(data));
+    
     const url = mode === 'edit' ? `/api/users/${id}` : '/api/users';
     const method = mode === 'edit' ? 'PUT' : 'POST';
     
@@ -209,6 +229,7 @@ async function saveUser(mode) {
         const response = await fetch(url, {
             method: method,
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify(data)
         });
         
@@ -242,7 +263,10 @@ async function deleteUser(id) {
     }
     
     try {
-        const response = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+        const response = await fetch(`/api/users/${id}`, { 
+            method: 'DELETE',
+            credentials: 'same-origin'
+        });
         
         if (response.ok) {
             showToast('Потребителят е изтрит');

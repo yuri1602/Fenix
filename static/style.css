@@ -396,6 +396,24 @@ body {
     gap: 0.5rem;
 }
 
+/* Role-based visibility */
+.admin-only {
+    display: block;
+}
+
+.user-only {
+    display: none;
+}
+
+/* When user is not admin */
+body.user-role .admin-only {
+    display: none !important;
+}
+
+body.user-role .user-only {
+    display: block !important;
+}
+
 /* Dark Mode Support (Optional) */
 @media (prefers-color-scheme: dark) {
     /* Add dark mode styles here if needed */
