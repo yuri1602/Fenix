@@ -375,7 +375,7 @@ def delete_user(user_id):
 @login_required
 def get_materials():
     """Get all materials with optional filtering"""
-    search = request.args.get('search', '').strip()
+    search = request.args.get('search', '').strip().lower()  # Convert to lowercase
     category = request.args.get('category', '').strip()
     low_stock = request.args.get('low_stock', '').lower() == 'true'
     
@@ -384,7 +384,7 @@ def get_materials():
     params = []
     
     if search:
-        query += ' AND (name LIKE ? OR notes LIKE ?)'
+        query += ' AND (LOWER(name) LIKE ? OR LOWER(notes) LIKE ?)'
         params.extend([f'%{search}%', f'%{search}%'])
     
     if category:
@@ -658,7 +658,7 @@ def get_stats():
 @login_required
 def get_books():
     """Get all books with optional filtering"""
-    search = request.args.get('search', '').strip()
+    search = request.args.get('search', '').strip().lower()  # Convert to lowercase
     grade = request.args.get('grade', '').strip()
     book_type = request.args.get('type', '').strip()
     publisher = request.args.get('publisher', '').strip()
@@ -669,7 +669,7 @@ def get_books():
     params = []
     
     if search:
-        query += ' AND (subject LIKE ? OR author LIKE ? OR notes LIKE ?)'
+        query += ' AND (LOWER(subject) LIKE ? OR LOWER(author) LIKE ? OR LOWER(notes) LIKE ?)'
         params.extend([f'%{search}%', f'%{search}%', f'%{search}%'])
     
     if grade:
