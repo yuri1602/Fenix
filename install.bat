@@ -1,43 +1,42 @@
 @echo off
-chcp 65001 >nul
 cls
 echo ============================================================
-echo    🎓 FENIX - Инсталация на системата
+echo    FENIX - System Installation
 echo ============================================================
 echo.
-echo Този скрипт ще инсталира всички необходими компоненти
-echo за да може да работи Fenix системата.
+echo This script will install all required components
+echo for the Fenix school inventory system.
 echo.
 echo ============================================================
 echo.
 
-REM Проверка дали скриптът се изпълнява от правилната директория
+REM Check if running from correct directory
 if not exist "app.py" (
-    echo ❌ ГРЕШКА: Не мога да намеря app.py файла!
+    echo ERROR: Cannot find app.py file!
     echo.
-    echo Моля стартирайте този скрипт от папката на проекта Fenix.
+    echo Please run this script from the Fenix project folder.
     echo.
     pause
     exit /b 1
 )
 
-echo 📋 Стъпка 1/4: Проверка на Python...
+echo Step 1/4: Checking Python...
 echo ============================================================
 echo.
 
-REM Проверка дали Python е инсталиран
+REM Check if Python is installed
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo ❌ Python НЕ е намерен на този компютър!
+    echo Python is NOT found on this computer!
     echo.
-    echo 📥 Моля инсталирайте Python преди да продължите:
+    echo Please install Python before continuing:
     echo.
-    echo    1. Отворете: https://www.python.org/downloads/
-    echo    2. Изтеглете най-новата версия на Python
-    echo    3. ⚠️  ВАЖНО: При инсталация отметнете "Add Python to PATH"
-    echo    4. Стартирайте отново този скрипт
+    echo    1. Open: https://www.python.org/downloads/
+    echo    2. Download the latest version of Python
+    echo    3. IMPORTANT: Check "Add Python to PATH" during installation
+    echo    4. Run this script again
     echo.
-    echo 🌐 Отваряне на страницата за изтегляне...
+    echo Opening download page...
     timeout /t 3 >nul
     start https://www.python.org/downloads/
     echo.
@@ -45,153 +44,153 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Показване на версията на Python
+REM Show Python version
 for /f "tokens=*" %%i in ('python --version') do set PYTHON_VERSION=%%i
-echo ✅ %PYTHON_VERSION% е инсталиран!
+echo OK: %PYTHON_VERSION% is installed!
 echo.
 
-echo 📋 Стъпка 2/4: Проверка на pip...
+echo Step 2/4: Checking pip...
 echo ============================================================
 echo.
 
-REM Проверка дали pip е инсталиран
+REM Check if pip is installed
 python -m pip --version >nul 2>&1
 if errorlevel 1 (
-    echo ❌ pip не е намерен!
+    echo pip not found!
     echo.
-    echo 📥 Инсталиране на pip...
+    echo Installing pip...
     python -m ensurepip --default-pip
     if errorlevel 1 (
-        echo ❌ Грешка при инсталиране на pip!
+        echo ERROR installing pip!
         pause
         exit /b 1
     )
 )
 
 for /f "tokens=*" %%i in ('python -m pip --version') do set PIP_VERSION=%%i
-echo ✅ %PIP_VERSION%
+echo OK: %PIP_VERSION%
 echo.
 
-echo 📋 Стъпка 3/4: Обновяване на pip...
+echo Step 3/4: Upgrading pip...
 echo ============================================================
 echo.
 
-python -m pip install --upgrade pip
+python -m pip install --upgrade pip --quiet
 if errorlevel 1 (
-    echo ⚠️  Не можах да обновя pip, но ще продължа с текущата версия
+    echo WARNING: Could not upgrade pip, continuing with current version
 ) else (
-    echo ✅ pip е обновен успешно!
+    echo OK: pip upgraded successfully!
 )
 echo.
 
-echo 📋 Стъпка 4/4: Инсталиране на зависимости...
+echo Step 4/4: Installing dependencies...
 echo ============================================================
 echo.
 
-REM Проверка дали има requirements.txt
+REM Check if requirements.txt exists
 if exist "requirements.txt" (
-    echo 📦 Инсталиране от requirements.txt...
-    python -m pip install -r requirements.txt
+    echo Installing from requirements.txt...
+    python -m pip install -r requirements.txt --quiet
     if errorlevel 1 (
         echo.
-        echo ⚠️  Грешка при инсталиране! Опитвам ръчна инсталация...
+        echo WARNING: Error during installation! Trying manual install...
         goto MANUAL_INSTALL
     )
-    echo ✅ Всички пакети са инсталирани от requirements.txt!
+    echo OK: All packages installed from requirements.txt!
     goto CHECK_INSTALL
 ) else (
-    echo ⚠️  requirements.txt не е намерен. Ръчна инсталация...
+    echo WARNING: requirements.txt not found. Manual installation...
     goto MANUAL_INSTALL
 )
 
 :MANUAL_INSTALL
 echo.
-echo 📦 Инсталиране на Flask...
-python -m pip install Flask==3.0.0
+echo Installing Flask...
+python -m pip install Flask==3.0.0 --quiet
 if errorlevel 1 goto INSTALL_ERROR
 
-echo 📦 Инсталиране на openpyxl...
-python -m pip install openpyxl==3.1.2
+echo Installing openpyxl...
+python -m pip install openpyxl==3.1.2 --quiet
 if errorlevel 1 goto INSTALL_ERROR
 
-echo 📦 Инсталиране на Werkzeug...
-python -m pip install Werkzeug==3.0.0
+echo Installing Werkzeug...
+python -m pip install Werkzeug==3.0.0 --quiet
 if errorlevel 1 goto INSTALL_ERROR
 
-echo ✅ Всички пакети са инсталирани ръчно!
+echo OK: All packages installed manually!
 goto CHECK_INSTALL
 
 :INSTALL_ERROR
 echo.
-echo ❌ Грешка при инсталиране на пакет!
+echo ERROR installing package!
 echo.
-echo Възможни причини:
-echo   - Няма интернет връзка
-echo   - Firewall блокира pip
-echo   - Нямате права за инсталация
+echo Possible causes:
+echo   - No internet connection
+echo   - Firewall blocking pip
+echo   - Insufficient permissions
 echo.
-echo Опитайте да стартирате Command Prompt като Administrator
-echo и изпълнете отново този скрипт.
+echo Try running Command Prompt as Administrator
+echo and execute this script again.
 echo.
 pause
 exit /b 1
 
 :CHECK_INSTALL
 echo.
-echo 📋 Проверка на инсталацията...
+echo Verifying installation...
 echo ============================================================
 echo.
 
-REM Проверка дали Flask е инсталиран успешно
-python -c "import flask; print('✅ Flask ' + flask.__version__)" 2>nul
+REM Check if Flask is installed successfully
+python -c "import flask; print('OK: Flask ' + flask.__version__)" 2>nul
 if errorlevel 1 (
-    echo ❌ Flask не е инсталиран правилно!
+    echo ERROR: Flask not installed correctly!
     goto INSTALL_ERROR
 )
 
-python -c "import openpyxl; print('✅ openpyxl ' + openpyxl.__version__)" 2>nul
+python -c "import openpyxl; print('OK: openpyxl ' + openpyxl.__version__)" 2>nul
 if errorlevel 1 (
-    echo ❌ openpyxl не е инсталиран правилно!
+    echo ERROR: openpyxl not installed correctly!
     goto INSTALL_ERROR
 )
 
-python -c "import werkzeug; print('✅ Werkzeug ' + werkzeug.__version__)" 2>nul
+python -c "import werkzeug; print('OK: Werkzeug ' + werkzeug.__version__)" 2>nul
 if errorlevel 1 (
-    echo ❌ Werkzeug не е инсталиран правилно!
+    echo ERROR: Werkzeug not installed correctly!
     goto INSTALL_ERROR
 )
 
 echo.
 echo ============================================================
-echo    ✅ ИНСТАЛАЦИЯТА ЗАВЪРШИ УСПЕШНО!
+echo    INSTALLATION COMPLETED SUCCESSFULLY!
 echo ============================================================
 echo.
-echo Вашата система е готова за използване!
+echo Your system is ready to use!
 echo.
-echo 🚀 За да стартирате приложението:
-echo    1. Двоен клик на start.bat
-echo    2. Или отворете браузър на: http://localhost:5000
+echo To start the application:
+echo    1. Double-click start.bat
+echo    2. Or open browser at: http://localhost:5000
 echo.
-echo 📚 Първоначални креденшъли:
-echo    Потребител: admin
-echo    Парола: admin
+echo Default credentials:
+echo    Username: admin
+echo    Password: admin
 echo.
-echo ⚠️  Не забравяйте да промените паролата след първо влизане!
+echo WARNING: Change the password after first login!
 echo.
 echo ============================================================
 echo.
 
-REM Питане дали да стартира сървъра сега
-set /p START_NOW="Искате ли да стартирате сървъра сега? (Y/N): "
+REM Ask if user wants to start the server now
+set /p START_NOW="Start the server now? (Y/N): "
 if /i "%START_NOW%"=="Y" (
     echo.
-    echo 🚀 Стартиране на сървъра...
+    echo Starting server...
     echo.
     timeout /t 2 >nul
     call start.bat
 ) else (
     echo.
-    echo Можете да стартирате сървъра по-късно с двоен клик на start.bat
+    echo You can start the server later by double-clicking start.bat
     echo.
     pause
 )
