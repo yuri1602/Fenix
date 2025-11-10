@@ -1,0 +1,13 @@
+2025-11-10 20:59:53,005 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.0.241:5000
+2025-11-10 20:59:53,005 - INFO - [33mPress CTRL+C to quit[0m
+2025-11-10 20:59:53,023 - INFO -  * Restarting with stat
+2025-11-10 20:59:54,705 - WARNING -  * Debugger is active!
+2025-11-10 20:59:54,750 - INFO -  * Debugger PIN: 327-536-842
+2025-11-10 21:00:01,022 - INFO - 127.0.0.1 - - [10/Nov/2025 21:00:01] "[32mGET / HTTP/1.1[0m" 302 -
+2025-11-10 21:00:01,076 - INFO - 127.0.0.1 - - [10/Nov/2025 21:00:01] "GET /login HTTP/1.1" 200 -
+2025-11-10 21:00:07,765 - INFO - 127.0.0.1 - - [10/Nov/2025 21:00:07] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-11-10 21:00:08,394 - INFO -  * Detected change in 'C:\\DISK D\\Projects\\Azure Mail\\Fenix\\app.py', reloading
+2025-11-10 21:00:08,558 - INFO -  * Restarting with stat

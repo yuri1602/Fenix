@@ -66,6 +66,9 @@
                             <li><a class="dropdown-item" href="#" data-section="users">
                                 <i class="bi bi-people"></i> Потребители
                             </a></li>
+                            <li><a class="dropdown-item" href="#" data-section="security-logs">
+                                <i class="bi bi-shield-lock"></i> Логове за сигурност
+                            </a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="#" data-section="categories">
                                 <i class="bi bi-tags"></i> Категории (Материали)
@@ -82,6 +85,9 @@
                         <span id="user-name">{{ user.full_name }}</span>
                         <small class="badge bg-light text-dark ms-1" id="user-role">{{ user.role }}</small>
                     </span>
+                    <button class="btn btn-outline-light btn-sm me-2" onclick="showChangePasswordModal()">
+                        <i class="bi bi-key"></i> Смяна на парола
+                    </button>
                     <button class="btn btn-outline-light btn-sm" onclick="logout()">
                         <i class="bi bi-box-arrow-right"></i> Изход
                     </button>
@@ -486,6 +492,91 @@
             </div>
         </div>
 
+        <!-- Security Logs Section (Admin only) -->
+        <div id="security-logs-section" class="content-section admin-only" style="display: none;">
+            <h2><i class="bi bi-shield-lock"></i> Логове за сигурност</h2>
+            
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <div class="card bg-info text-white">
+                        <div class="card-body">
+                            <h5><i class="bi bi-info-circle"></i> Общо записи</h5>
+                            <h2 id="total-logs">0</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-3">
+                <div class="card-header bg-light">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap">
+                        <h5 class="mb-0">История на достъпа</h5>
+                        <div>
+                            <button class="btn btn-sm btn-primary" onclick="loadSecurityLogs()">
+                                <i class="bi bi-arrow-clockwise"></i> Обнови
+                            </button>
+                            <button class="btn btn-sm btn-success" onclick="exportSecurityLogs()">
+                                <i class="bi bi-download"></i> Експорт CSV
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Филтър по тип:</label>
+                            <select class="form-select" id="logs-event-type" onchange="loadSecurityLogs()">
+                                <option value="">Всички</option>
+                                <option value="LOGIN_SUCCESS">Успешен вход</option>
+                                <option value="LOGIN_FAILED">Неуспешен вход</option>
+                                <option value="LOGIN_BLOCKED">Блокиран опит</option>
+                                <option value="PASSWORD_CHANGED">Смяна на парола</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Филтър по потребител:</label>
+                            <input type="text" class="form-control" id="logs-username" 
+                                   placeholder="Потребителско име" onchange="loadSecurityLogs()">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Брой записи:</label>
+                            <select class="form-select" id="logs-limit" onchange="loadSecurityLogs()">
+                                <option value="50">50</option>
+                                <option value="100" selected>100</option>
+                                <option value="500">500</option>
+                                <option value="1000">1000</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> 
+                        Тук се показват всички опити за достъп, промени на пароли и сигурностни събития.
+                        Жълтите редове показват неуспешни опити.
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Време</th>
+                                    <th>Тип</th>
+                                    <th>Потребител</th>
+                                    <th>IP адрес</th>
+                                    <th>Успешно</th>
+                                    <th>Детайли</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="security-logs-tbody">
+                                <tr><td colspan="7" class="text-center">Зареждане...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Categories Management Section (Admin only) -->
                 <!-- Categories Section (Admin only) -->
         <div id="categories-section" class="content-section admin-only" style="display: none;">
@@ -801,6 +892,11 @@
                         loadUsers();
                     }
                     break;
+                case 'security-logs':
+                    if (currentUser && currentUser.role === 'admin') {
+                        loadSecurityLogs();
+                    }
+                    break;
                 case 'categories':
                     if (currentUser && currentUser.role === 'admin') {
                         loadCategories();
@@ -865,10 +961,11 @@
             }, 3000);
         }
     </script>
-    <script src="{{ url_for('static', filename='materials.js') }}?v=9"></script>
-    <script src="{{ url_for('static', filename='books.js') }}?v=9"></script>
-    <script src="{{ url_for('static', filename='users.js') }}?v=9"></script>
-    <script src="{{ url_for('static', filename='admin.js') }}?v=9"></script>
-    <script src="{{ url_for('static', filename='requests.js') }}?v=9"></script>
+    <script src="{{ url_for('static', filename='materials.js') }}?v=10"></script>
+    <script src="{{ url_for('static', filename='books.js') }}?v=10"></script>
+    <script src="{{ url_for('static', filename='users.js') }}?v=10"></script>
+    <script src="{{ url_for('static', filename='security.js') }}?v=10"></script>
+    <script src="{{ url_for('static', filename='admin.js') }}?v=10"></script>
+    <script src="{{ url_for('static', filename='requests.js') }}?v=10"></script>
 </body>
 </html>

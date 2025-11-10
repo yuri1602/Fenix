@@ -7,11 +7,14 @@ from openpyxl import load_workbook
 import io
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
+import logging
+from collections import defaultdict
+import time
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
-app.config['SECRET_KEY'] = 'your-secret-key-change-in-production'  # Change this!
+app.config['SECRET_KEY'] = 'FEN1X-$ecur3-K3y-2025-Pr0duct10n!'  # Strong secret key
 
 # Session configuration for better mobile/tablet support
 app.config['SESSION_COOKIE_SECURE'] = False  # Set to True if using HTTPS
@@ -19,8 +22,27 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Allow cookies from same site
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=1)  # 24 hours
 
+# Security configuration - Protection against brute force
+MAX_LOGIN_ATTEMPTS = 5  # Maximum failed login attempts
+LOCKOUT_DURATION = 300  # Lockout duration in seconds (5 minutes)
+login_attempts = defaultdict(lambda: {'count': 0, 'lockout_until': 0})
+
 # Ensure upload folder exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# Configure security logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('logs/security.log', encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
+security_logger = logging.getLogger('security')
+
+# Ensure logs folder exists
+os.makedirs('logs', exist_ok=True)
 
 DATABASE = 'school_inventory.db'
 
@@ -29,6 +51,70 @@ def get_db_connection():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
+
+def get_client_ip():
+    """Get real client IP address (works with proxies)"""
+    if request.headers.get('X-Forwarded-For'):
+        return request.headers.get('X-Forwarded-For').split(',')[0].strip()
+    elif request.headers.get('X-Real-IP'):
+        return request.headers.get('X-Real-IP')
+    else:
+        return request.remote_addr
+
+def log_security_event(event_type, username, ip_address, user_agent, success, details=''):
+    """Log security events to database and file"""
+    # Log to file
+    security_logger.info(
+        f"EVENT: {event_type} | USER: {username} | IP: {ip_address} | "
+        f"SUCCESS: {success} | DETAILS: {details} | USER_AGENT: {user_agent}"
+    )
+    
+    # Log to database
+    try:
+        conn = get_db_connection()
+        conn.execute('''
+            INSERT INTO security_logs (event_type, username, ip_address, user_agent, success, details)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (event_type, username, ip_address, user_agent, success, details))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        security_logger.error(f"Failed to log to database: {e}")
+
+def check_rate_limit(ip_address):
+    """Check if IP is rate limited due to too many failed attempts"""
+    current_time = time.time()
+    attempt_data = login_attempts[ip_address]
+    
+    # Check if still locked out
+    if attempt_data['lockout_until'] > current_time:
+        remaining = int(attempt_data['lockout_until'] - current_time)
+        return False, remaining
+    
+    # Reset if lockout expired
+    if attempt_data['lockout_until'] > 0 and attempt_data['lockout_until'] <= current_time:
+        login_attempts[ip_address] = {'count': 0, 'lockout_until': 0}
+    
+    return True, 0
+
+def record_failed_attempt(ip_address):
+    """Record a failed login attempt and apply lockout if needed"""
+    login_attempts[ip_address]['count'] += 1
+    
+    if login_attempts[ip_address]['count'] >= MAX_LOGIN_ATTEMPTS:
+        login_attempts[ip_address]['lockout_until'] = time.time() + LOCKOUT_DURATION
+        security_logger.warning(
+            f"IP {ip_address} locked out for {LOCKOUT_DURATION}s after "
+            f"{MAX_LOGIN_ATTEMPTS} failed attempts"
+        )
+        return True  # Locked out
+    
+    return False
+
+def reset_login_attempts(ip_address):
+    """Reset login attempts after successful login"""
+    if ip_address in login_attempts:
+        del login_attempts[ip_address]
 
 def login_required(f):
     """Decorator to require login for routes"""
@@ -83,6 +169,20 @@ def init_db():
         )
     ''')
     
+    # Security logs table
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS security_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type TEXT NOT NULL,
+            username TEXT NOT NULL,
+            ip_address TEXT NOT NULL,
+            user_agent TEXT,
+            success INTEGER NOT NULL,
+            details TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
     # Books table (учебници и тетрадки)
     conn.execute('''
         CREATE TABLE IF NOT EXISTS books (
@@ -119,16 +219,28 @@ def init_db():
         )
     ''')
     
-    # Create default admin user if no users exist
+    # Create default users if no users exist
     user_count = conn.execute('SELECT COUNT(*) FROM users').fetchone()[0]
     if user_count == 0:
-        admin_password = generate_password_hash('admin123')
+        # Strong default passwords - CHANGE THESE IMMEDIATELY!
+        admin_password = generate_password_hash('Fenix@Admin2025!')
+        user_password = generate_password_hash('Fenix@User2025!')
+        
         conn.execute('''
             INSERT INTO users (username, password_hash, full_name, role, company)
             VALUES (?, ?, ?, ?, ?)
         ''', ('admin', admin_password, 'Администратор', 'admin', 'Училище'))
+        
+        conn.execute('''
+            INSERT INTO users (username, password_hash, full_name, role, company)
+            VALUES (?, ?, ?, ?, ?)
+        ''', ('user', user_password, 'Потребител', 'user', 'Училище'))
+        
         conn.commit()
-        print("✅ Създаден администраторски акаунт: admin / admin123")
+        print("✅ Създадени акаунти:")
+        print("   Admin: admin / Fenix@Admin2025!")
+        print("   User:  user  / Fenix@User2025!")
+        print("   ⚠️  ВАЖНО: Сменете паролите веднага!")
     
     # Migration: Add max_threshold column if it doesn't exist
     try:
@@ -215,29 +327,45 @@ def login_page():
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    """Login endpoint"""
+    """Login endpoint with security logging and rate limiting"""
     data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
     
+    # Get client information
+    ip_address = get_client_ip()
+    user_agent = request.headers.get('User-Agent', 'Unknown')
+    
+    # Validate input
     if not username or not password:
-        return jsonify({'error': 'Username and password required'}), 400
+        log_security_event('LOGIN_ATTEMPT', username or 'EMPTY', ip_address, user_agent, 
+                         False, 'Missing username or password')
+        return jsonify({'error': 'Потребителско име и парола са задължителни'}), 400
     
+    # Check rate limiting
+    allowed, remaining = check_rate_limit(ip_address)
+    if not allowed:
+        log_security_event('LOGIN_BLOCKED', username, ip_address, user_agent, 
+                         False, f'Rate limited - {remaining}s remaining')
+        return jsonify({
+            'error': f'Твърде много неуспешни опити! Изчакайте {remaining} секунди.',
+            'lockout_time': remaining
+        }), 429
+    
+    # Query user
     conn = get_db_connection()
     user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
     conn.close()
     
+    # Check credentials
     if user and check_password_hash(user['password_hash'], password):
-        session.permanent = True  # Make session persistent
+        # Successful login
+        session.permanent = True
         session['user_id'] = user['id']
         session['username'] = user['username']
         session['full_name'] = user['full_name']
         session['role'] = user['role']
         session['company'] = user['company']
-        
-        print(f"✅ User {username} logged in successfully. Session ID: {session.get('user_id')}")
-        print(f"   Session permanent: {session.permanent}")
-        print(f"   Session data: {dict(session)}")
         
         # Update last login
         conn = get_db_connection()
@@ -245,8 +373,17 @@ def login():
         conn.commit()
         conn.close()
         
+        # Reset failed attempts
+        reset_login_attempts(ip_address)
+        
+        # Log successful login
+        log_security_event('LOGIN_SUCCESS', username, ip_address, user_agent, 
+                         True, f'Role: {user["role"]}')
+        
+        print(f"✅ User {username} logged in from {ip_address}")
+        
         return jsonify({
-            'message': 'Login successful',
+            'message': 'Успешен вход',
             'user': {
                 'id': user['id'],
                 'username': user['username'],
@@ -256,7 +393,24 @@ def login():
             }
         })
     else:
-        return jsonify({'error': 'Invalid username or password'}), 401
+        # Failed login
+        locked_out = record_failed_attempt(ip_address)
+        attempts_left = MAX_LOGIN_ATTEMPTS - login_attempts[ip_address]['count']
+        
+        # Log failed attempt
+        log_security_event('LOGIN_FAILED', username, ip_address, user_agent, 
+                         False, f'Invalid credentials - {attempts_left} attempts left')
+        
+        if locked_out:
+            return jsonify({
+                'error': f'Твърде много неуспешни опити! Заключен за {LOCKOUT_DURATION} секунди.',
+                'lockout_time': LOCKOUT_DURATION
+            }), 429
+        else:
+            return jsonify({
+                'error': f'Грешно потребителско име или парола. Остават {attempts_left} опита.',
+                'attempts_left': attempts_left
+            }), 401
 
 @app.route('/api/logout', methods=['POST'])
 def logout():
@@ -368,6 +522,118 @@ def delete_user(user_id):
     conn.close()
     
     return jsonify({'message': 'User deleted successfully'})
+
+@app.route('/api/change-password', methods=['POST'])
+@login_required
+def change_password():
+    """Change password for current user or any user (admin only)"""
+    data = request.get_json()
+    current_password = data.get('current_password', '')
+    new_password = data.get('new_password', '')
+    target_user_id = data.get('user_id')  # Optional: admin can change other users' passwords
+    
+    # Get client info for logging
+    ip_address = get_client_ip()
+    user_agent = request.headers.get('User-Agent', 'Unknown')
+    
+    # Validate new password
+    if not new_password or len(new_password) < 6:
+        return jsonify({'error': 'Новата парола трябва да е поне 6 символа'}), 400
+    
+    conn = get_db_connection()
+    
+    # If admin is changing another user's password
+    if target_user_id and target_user_id != session['user_id']:
+        if session.get('role') != 'admin':
+            return jsonify({'error': 'Само администратор може да променя пароли на други потребители'}), 403
+        
+        # Admin changing other user's password (no current password needed)
+        target_user = conn.execute('SELECT username FROM users WHERE id = ?', (target_user_id,)).fetchone()
+        if not target_user:
+            conn.close()
+            return jsonify({'error': 'Потребителят не съществува'}), 404
+        
+        new_hash = generate_password_hash(new_password)
+        conn.execute('UPDATE users SET password_hash = ? WHERE id = ?', (new_hash, target_user_id))
+        conn.commit()
+        conn.close()
+        
+        log_security_event('PASSWORD_CHANGED_BY_ADMIN', target_user['username'], ip_address, 
+                         user_agent, True, f"Admin {session['username']} changed password")
+        
+        return jsonify({'message': 'Паролата е променена успешно'})
+    
+    # User changing their own password
+    user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    
+    if not user:
+        conn.close()
+        return jsonify({'error': 'Потребителят не съществува'}), 404
+    
+    # Verify current password
+    if not check_password_hash(user['password_hash'], current_password):
+        conn.close()
+        log_security_event('PASSWORD_CHANGE_FAILED', user['username'], ip_address, 
+                         user_agent, False, 'Invalid current password')
+        return jsonify({'error': 'Грешна текуща парола'}), 401
+    
+    # Update password
+    new_hash = generate_password_hash(new_password)
+    conn.execute('UPDATE users SET password_hash = ? WHERE id = ?', (new_hash, session['user_id']))
+    conn.commit()
+    conn.close()
+    
+    log_security_event('PASSWORD_CHANGED', user['username'], ip_address, 
+                     user_agent, True, 'User changed own password')
+    
+    return jsonify({'message': 'Паролата е променена успешно'})
+
+@app.route('/api/security-logs', methods=['GET'])
+@admin_required
+def get_security_logs():
+    """Get security logs (admin only)"""
+    limit = request.args.get('limit', 100, type=int)
+    offset = request.args.get('offset', 0, type=int)
+    event_type = request.args.get('event_type', '')
+    username = request.args.get('username', '')
+    
+    conn = get_db_connection()
+    
+    query = 'SELECT * FROM security_logs WHERE 1=1'
+    params = []
+    
+    if event_type:
+        query += ' AND event_type = ?'
+        params.append(event_type)
+    
+    if username:
+        query += ' AND username LIKE ?'
+        params.append(f'%{username}%')
+    
+    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?'
+    params.extend([limit, offset])
+    
+    logs = conn.execute(query, params).fetchall()
+    
+    # Get total count
+    count_query = 'SELECT COUNT(*) as total FROM security_logs WHERE 1=1'
+    count_params = []
+    if event_type:
+        count_query += ' AND event_type = ?'
+        count_params.append(event_type)
+    if username:
+        count_query += ' AND username LIKE ?'
+        count_params.append(f'%{username}%')
+    
+    total = conn.execute(count_query, count_params).fetchone()['total']
+    conn.close()
+    
+    return jsonify({
+        'logs': [dict(row) for row in logs],
+        'total': total,
+        'limit': limit,
+        'offset': offset
+    })
 
 # ==================== MATERIALS ROUTES ====================
 

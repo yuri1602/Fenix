@@ -48,6 +48,10 @@ function displayUsers(users) {
             <td>${u.company || '-'}</td>
             <td><small class="text-muted">${new Date(u.created_at).toLocaleString('bg-BG')}</small></td>
             <td>
+                <button class="btn btn-sm btn-warning" onclick="showChangePasswordModal(${u.id})"
+                        title="Смяна на парола">
+                    <i class="bi bi-key"></i>
+                </button>
                 <button class="btn btn-sm btn-primary" onclick="showEditUserModal(${u.id})"
                         ${u.username === 'admin' ? 'disabled title="Системен администратор"' : ''}>
                     <i class="bi bi-pencil"></i>
